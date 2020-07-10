@@ -9,6 +9,7 @@ import 'package:provider_shopper/models/cart.dart';
 import 'package:provider_shopper/models/catalog.dart';
 import 'package:provider_shopper/screens/cart.dart';
 import 'package:provider_shopper/screens/catalog.dart';
+import 'package:provider_shopper/screens/login.dart';
 
 void main() {
   runApp(MyApp());
@@ -22,20 +23,25 @@ class MyApp extends StatelessWidget {
       providers: [
         // In this sample app, CatalogModel never changes, so a simple Provider
         // is sufficient.
-        Provider(builder: (context) => CatalogModel()),
+        Provider(create: (context) => CatalogModel()),
         // CartModel is implemented as a ChangeNotifier, which calls for the use
         // of ChangeNotifierProvider. Moreover, CartModel depends
         // on CatalogModel, so a ProxyProvider is needed.
         ChangeNotifierProxyProvider<CatalogModel, CartModel>(
-            builder: (context, catalog, previousCart) =>
-                CartModel(catalog, previousCart)),
+          create: (context) => CartModel(),
+          update: (context, catalog, cart) {
+            cart.catalog = catalog;
+            return cart;
+          },
+        ),
       ],
       child: MaterialApp(
         title: 'Provider Demo',
         theme: appTheme,
         initialRoute: '/',
         routes: {
-          '/': (context) => MyCatalog(),
+          '/': (context) => MyLogin(),
+          '/catalog': (context) => MyCatalog(),
           '/cart': (context) => MyCart(),
         },
       ),

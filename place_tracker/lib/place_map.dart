@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import 'place.dart';
@@ -22,13 +24,16 @@ class PlaceMap extends StatefulWidget {
 }
 
 class PlaceMapState extends State<PlaceMap> {
-  static BitmapDescriptor _getPlaceMarkerIcon(PlaceCategory category) {
+  static Future<BitmapDescriptor> _getPlaceMarkerIcon(
+      BuildContext context, PlaceCategory category) async {
     switch (category) {
       case PlaceCategory.favorite:
-        return BitmapDescriptor.fromAsset('assets/heart.png');
+        return BitmapDescriptor.fromAssetImage(
+            createLocalImageConfiguration(context), 'assets/heart.png');
         break;
       case PlaceCategory.visited:
-        return BitmapDescriptor.fromAsset('assets/visited.png');
+        return BitmapDescriptor.fromAssetImage(
+            createLocalImageConfiguration(context), 'assets/visited.png');
         break;
       case PlaceCategory.wantToGo:
       default:
@@ -47,7 +52,7 @@ class PlaceMapState extends State<PlaceMap> {
 
   LatLng _lastMapPosition;
 
-  Map<Marker, Place> _markedPlaces = Map<Marker, Place>();
+  final Map<Marker, Place> _markedPlaces = <Marker, Place>{};
 
   final Set<Marker> _markers = {};
 
@@ -61,22 +66,24 @@ class PlaceMapState extends State<PlaceMap> {
 
     // Draw initial place markers on creation so that we have something
     // interesting to look at.
+    var markers = <Marker>{};
+    for (var place in Provider.of<AppState>(context, listen: false).places) {
+      markers.add(await _createPlaceMarker(context, place));
+    }
     setState(() {
-      for (Place place in AppState.of(context).places) {
-        _markers.add(_createPlaceMarker(place));
-      }
+      _markers.addAll(markers);
     });
 
     // Zoom to fit the initially selected category.
     await _zoomToFitPlaces(
       _getPlacesForCategory(
-        AppState.of(context).selectedCategory,
+        Provider.of<AppState>(context, listen: false).selectedCategory,
         _markedPlaces.values.toList(),
       ),
     );
   }
 
-  Marker _createPlaceMarker(Place place) {
+  Future<Marker> _createPlaceMarker(BuildContext context, Place place) async {
     final marker = Marker(
       markerId: MarkerId(place.latLng.toString()),
       position: place.latLng,
@@ -85,8 +92,9 @@ class PlaceMapState extends State<PlaceMap> {
         snippet: '${place.starRating} Star Rating',
         onTap: () => _pushPlaceDetailsScreen(place),
       ),
-      icon: _getPlaceMarkerIcon(place.category),
-      visible: place.category == AppState.of(context).selectedCategory,
+      icon: await _getPlaceMarkerIcon(context, place.category),
+      visible: place.category ==
+          Provider.of<AppState>(context, listen: false).selectedCategory,
     );
     _markedPlaces[marker] = place;
     return marker;
@@ -108,7 +116,8 @@ class PlaceMapState extends State<PlaceMap> {
 
   void _onPlaceChanged(Place value) {
     // Replace the place with the modified version.
-    final newPlaces = List<Place>.from(AppState.of(context).places);
+    final newPlaces =
+        List<Place>.from(Provider.of<AppState>(context, listen: false).places);
     final index = newPlaces.indexWhere((place) => place.id == value.id);
     newPlaces[index] = value;
 
@@ -119,14 +128,15 @@ class PlaceMapState extends State<PlaceMap> {
     // in the main build method due to a modified AppState.
     _configuration = MapConfiguration(
       places: newPlaces,
-      selectedCategory: AppState.of(context).selectedCategory,
+      selectedCategory:
+          Provider.of<AppState>(context, listen: false).selectedCategory,
     );
 
-    AppState.updateWith(context, places: newPlaces);
+    Provider.of<AppState>(context, listen: false).setPlaces(newPlaces);
   }
 
   void _updateExistingPlaceMarker({@required Place place}) {
-    Marker marker = _markedPlaces.keys
+    var marker = _markedPlaces.keys
         .singleWhere((value) => _markedPlaces[value].id == place.id);
 
     setState(() {
@@ -154,13 +164,13 @@ class PlaceMapState extends State<PlaceMap> {
   }
 
   Future<void> _switchSelectedCategory(PlaceCategory category) async {
-    AppState.updateWith(context, selectedCategory: category);
+    Provider.of<AppState>(context, listen: false).setSelectedCategory(category);
     await _showPlacesForSelectedCategory(category);
   }
 
   Future<void> _showPlacesForSelectedCategory(PlaceCategory category) async {
     setState(() {
-      for (Marker marker in List.of(_markedPlaces.keys)) {
+      for (var marker in List.of(_markedPlaces.keys)) {
         final place = _markedPlaces[marker];
         final updatedMarker = marker.copyWith(
           visibleParam: place.category == category,
@@ -181,15 +191,15 @@ class PlaceMapState extends State<PlaceMap> {
   }
 
   Future<void> _zoomToFitPlaces(List<Place> places) async {
-    GoogleMapController controller = await mapController.future;
+    var controller = await mapController.future;
 
     // Default min/max values to latitude and longitude of center.
-    double minLat = widget.center.latitude;
-    double maxLat = widget.center.latitude;
-    double minLong = widget.center.longitude;
-    double maxLong = widget.center.longitude;
+    var minLat = widget.center.latitude;
+    var maxLat = widget.center.latitude;
+    var minLong = widget.center.longitude;
+    var maxLong = widget.center.longitude;
 
-    for (Place place in places) {
+    for (var place in places) {
       minLat = min(minLat, place.latitude);
       maxLat = max(maxLat, place.latitude);
       minLong = min(minLong, place.longitude);
@@ -224,16 +234,20 @@ class PlaceMapState extends State<PlaceMap> {
   Future<void> _confirmAddPlace(BuildContext context) async {
     if (_pendingMarker != null) {
       // Create a new Place and map it to the marker we just added.
-      final Place newPlace = Place(
-        id: Uuid().v1() as String,
+      final newPlace = Place(
+        id: Uuid().v1(),
         latLng: _pendingMarker.position,
         name: _pendingMarker.infoWindow.title,
-        category: AppState.of(context).selectedCategory,
+        category:
+            Provider.of<AppState>(context, listen: false).selectedCategory,
       );
+
+      var placeMarker = await _getPlaceMarkerIcon(context,
+          Provider.of<AppState>(context, listen: false).selectedCategory);
 
       setState(() {
         final updatedMarker = _pendingMarker.copyWith(
-          iconParam: _getPlaceMarkerIcon(AppState.of(context).selectedCategory),
+          iconParam: placeMarker,
           infoWindowParam: InfoWindow(
             title: 'New Place',
             snippet: null,
@@ -267,18 +281,20 @@ class PlaceMapState extends State<PlaceMap> {
       );
 
       // Add the new place to the places stored in appState.
-      final List<Place> newPlaces = List.from(AppState.of(context).places)
-        ..add(newPlace);
+      final newPlaces =
+          List<Place>.from(Provider.of<AppState>(context, listen: false).places)
+            ..add(newPlace);
 
       // Manually update our map configuration here since our map is already
       // updated with the new marker. Otherwise, the map would be reconfigured
       // in the main build method due to a modified AppState.
       _configuration = MapConfiguration(
         places: newPlaces,
-        selectedCategory: AppState.of(context).selectedCategory,
+        selectedCategory:
+            Provider.of<AppState>(context, listen: false).selectedCategory,
       );
 
-      AppState.updateWith(context, places: newPlaces);
+      Provider.of<AppState>(context, listen: false).setPlaces(newPlaces);
     }
   }
 
@@ -292,7 +308,7 @@ class PlaceMapState extends State<PlaceMap> {
   }
 
   void _onToggleMapTypePressed() {
-    final MapType nextType =
+    final nextType =
         MapType.values[(_currentMapType.index + 1) % MapType.values.length];
 
     setState(() {
@@ -301,9 +317,10 @@ class PlaceMapState extends State<PlaceMap> {
   }
 
   Future<void> _maybeUpdateMapConfiguration() async {
-    _configuration ??= MapConfiguration.of(AppState.of(context));
-    final MapConfiguration newConfiguration =
-        MapConfiguration.of(AppState.of(context));
+    _configuration ??=
+        MapConfiguration.of(Provider.of<AppState>(context, listen: false));
+    final newConfiguration =
+        MapConfiguration.of(Provider.of<AppState>(context, listen: false));
 
     // Since we manually update [_configuration] when place or selectedCategory
     // changes come from the [place_map], we should only enter this if statement
@@ -337,6 +354,7 @@ class PlaceMapState extends State<PlaceMap> {
   @override
   Widget build(BuildContext context) {
     _maybeUpdateMapConfiguration();
+    var state = Provider.of<AppState>(context);
 
     return Builder(builder: (context) {
       // We need this additional builder here so that we can pass its context to
@@ -357,7 +375,7 @@ class PlaceMapState extends State<PlaceMap> {
               onCameraMove: (position) => _lastMapPosition = position.target,
             ),
             _CategoryButtonBar(
-              selectedPlaceCategory: AppState.of(context).selectedCategory,
+              selectedPlaceCategory: state.selectedCategory,
               visible: _pendingMarker == null,
               onChanged: _switchSelectedCategory,
             ),

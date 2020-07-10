@@ -10,13 +10,14 @@ match any new language/SDK features, etc.).
 | chrome-os-best-practices  |                    |                |
 | experimental              |                    |                |
 | flutter_maps_firestore    |                    |                |
-| isolate_example           | redbrogdon         | 9/12/19        |
-| jsonexample               |                    |                |
+| infinite_list             | filiph             | 5/13/20        |
+| isolate_example           | johnpryan          | 11/21/19       |
+| jsonexample               | redbrogdon         | 1/3/20         |
 | material_studies/shrine   |                    |                |
 | place_tracker             |                    |                |
 | platform_design           | johnpryan          | 10/7/19        |
 | platform_view_swift       | redbrogdon         | 10/7/19        |
-| provider_counter          |                    |                |
-| provider_shopper          |                    |                |
+| provider_counter          | redbrogdon         | 11/21/19       |
+| provider_shopper          | redbrogdon         | 11/21/19       |
 | veggieseasons             |                    |                |
 | web                       |                    |                |
